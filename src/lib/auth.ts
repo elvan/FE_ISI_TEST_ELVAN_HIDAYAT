@@ -6,9 +6,15 @@ import bcrypt from 'bcryptjs';
 
 export async function getUserByEmail(email: string) {
   try {
+    // Add more debugging to identify issues
+    console.log(`Looking up user with email: ${email}`);
+    
+    // Fix the query format for Drizzle with proper where clause
     const user = await db.query.users.findFirst({
-      where: eq(users.email, email),
+      where: (users) => eq(users.email, email),
     });
+    
+    console.log('User found:', user ? 'Yes' : 'No');
     return user;
   } catch (error) {
     console.error('Error fetching user by email:', error);
