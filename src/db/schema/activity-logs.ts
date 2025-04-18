@@ -1,5 +1,5 @@
-import { pgTable, serial, varchar, timestamp, text, integer, jsonb } from 'drizzle-orm/pg-core';
-import { EntityType, LogAction } from '../../types';
+import { pgTable, serial, varchar, timestamp, integer, jsonb } from 'drizzle-orm/pg-core';
+import { EntityType, LogAction } from '@/types';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { users } from './users';

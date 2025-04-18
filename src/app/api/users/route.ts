@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
 import { UserRole } from '@/types';
@@ -22,18 +22,24 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const roleParam = searchParams.get('role');
     
-    let query = db.select({
+    // Prepare filters
+    const filters = [];
+    
+    // Filter by role if specified
+    if (roleParam && Object.values(UserRole).includes(roleParam as UserRole)) {
+      filters.push(eq(users.role, roleParam as UserRole));
+    }
+
+    // Build the query with conditions
+    const query = db.select({
       id: users.id,
       name: users.name,
       email: users.email,
       role: users.role,
       createdAt: users.createdAt,
-    }).from(users);
-
-    // Filter by role if specified
-    if (roleParam && Object.values(UserRole).includes(roleParam as UserRole)) {
-      query = query.where(eq(users.role, roleParam as UserRole));
-    }
+    })
+    .from(users)
+    .where(filters.length > 0 ? and(...filters) : undefined);
 
     const result = await query;
 

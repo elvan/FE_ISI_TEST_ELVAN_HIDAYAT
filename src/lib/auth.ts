@@ -1,6 +1,5 @@
 import { UserRole } from '@/types';
 import { db } from '@/db';
-import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 

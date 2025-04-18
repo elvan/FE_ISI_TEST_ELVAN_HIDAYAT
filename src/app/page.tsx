@@ -46,7 +46,7 @@ export default async function Home() {
               <span className="block text-primary mt-3">Made Simple</span>
             </h1>
             <p className="mt-6 max-w-lg md:max-w-xl mx-auto md:mx-0 text-lg md:text-xl text-muted-foreground">
-              Streamline your team's workflow with our task management system designed specifically for internal company use. Assign, track, and complete tasks efficiently.
+              Streamline your team&apos;s workflow with our task management system designed specifically for internal company use. Assign, track, and complete tasks efficiently.
             </p>
             <div className="mt-10">
               <Link
@@ -66,7 +66,7 @@ export default async function Home() {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground">Key Features</h2>
             <p className="mt-4 text-xl text-muted-foreground max-w-2xl mx-auto">
-              Designed to improve your team's productivity and collaboration.
+              Designed to improve your team&apos;s productivity and collaboration.
             </p>
           </div>
 

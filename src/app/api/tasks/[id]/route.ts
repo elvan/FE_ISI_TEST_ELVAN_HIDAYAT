@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { tasks, users } from '@/db/schema';
 import { activityLogs } from '@/db/schema/activity-logs';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
 import { TaskStatus, UserRole, EntityType, LogAction } from '@/types';
@@ -154,9 +154,9 @@ export async function PATCH(
     const { title, description, status, assignedToId, dueDate } = body;
 
     // Create an object to hold the updates
-    const updates: any = { updatedAt: new Date() };
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
     let logAction = LogAction.UPDATED;
-    const logDetails: Record<string, any> = {};
+    const logDetails: Record<string, unknown> = {};
 
     // Team members can only update status
     if (!isLead) {
@@ -265,7 +265,7 @@ export async function PATCH(
     
     // Get assignee info if task has an assignee
     let assignee = null;
-    if (taskWithCreator.assignedToId) {
+    if (updatedTask.assignedToId !== null && updatedTask.assignedToId !== undefined) {
       assignee = await db
         .select({
           id: users.id,
@@ -274,7 +274,7 @@ export async function PATCH(
           role: users.role,
         })
         .from(users)
-        .where(eq(users.id, updatedTask.assignedToId))
+        .where(eq(users.id, updatedTask.assignedToId as number))
         .then(rows => rows[0] || null);
     }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { tasks, users } from '@/db/schema';
 import { activityLogs } from '@/db/schema/activity-logs';
-import { eq, and, desc, isNull, asc, or, sql } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
 import { TaskStatus, UserRole, EntityType, LogAction } from '@/types';
@@ -20,10 +20,26 @@ export async function GET(request: NextRequest) {
     const statusParam = searchParams.get('status');
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? parseInt(limitParam) : undefined;
-    
-    // We'll use a different approach with two separate queries
-    // 1. First query to get the tasks with creator info
-    let query = db.select({
+
+    // Prepare filters for the query
+    const filters = [];
+
+    // Filter by user role
+    if (session.user.role === UserRole.LEAD) {
+      // Lead users see tasks they created
+      filters.push(eq(tasks.createdById, userId));
+    } else {
+      // Team members see tasks assigned to them
+      filters.push(eq(tasks.assignedToId, userId));
+    }
+
+    // Filter by status if specified
+    if (statusParam && statusParam !== 'all' && Object.values(TaskStatus).includes(statusParam as TaskStatus)) {
+      filters.push(eq(tasks.status, statusParam as TaskStatus));
+    }
+
+    // Build query with all conditions
+    const query = db.select({
       id: tasks.id,
       title: tasks.title,
       description: tasks.description,
@@ -40,32 +56,29 @@ export async function GET(request: NextRequest) {
     })
     .from(tasks)
     .leftJoin(users, eq(tasks.createdById, users.id))
+    .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(tasks.createdAt))
     .limit(limit || 100); // Default limit of 100, or use the specified limit
-
-    // Filter by user role
-    if (session.user.role === UserRole.LEAD) {
-      // Lead users see tasks they created
-      query = query.where(eq(tasks.createdById, userId));
-    } else {
-      // Team members see tasks assigned to them
-      query = query.where(eq(tasks.assignedToId, userId));
-    }
-
-    // Filter by status if specified
-    if (statusParam && statusParam !== 'all' && Object.values(TaskStatus).includes(statusParam as TaskStatus)) {
-      query = query.where(eq(tasks.status, statusParam as TaskStatus));
-    }
 
     const result = await query;
 
     // Get all unique assignedToIds to fetch assignee info
     const assigneeIds = result
       .filter(task => task.assignedToId !== null)
-      .map(task => task.assignedToId);
-    
+      .map(task => task.assignedToId)
+      // Filter out any potentially null values and ensure they're numbers
+      .filter((id): id is number => id !== null);
+
+    // Define the interface for assignee
+    interface Assignee {
+      id: number;
+      name: string;
+      email: string;
+      role: UserRole;
+    }
+
     // Only fetch assignees if there are any tasks with assignees
-    let assignees = [];
+    let assignees: Assignee[] = [];
     if (assigneeIds.length > 0) {
       assignees = await db.select({
         id: users.id,
@@ -78,7 +91,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Create a map of assignee info by id for quick lookup
-    const assigneeMap = {};
+    const assigneeMap: Record<number, Assignee> = {};
     for (const assignee of assignees) {
       assigneeMap[assignee.id] = assignee;
     }
@@ -167,7 +180,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(),
     });
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: 'Task created successfully',
       task: newTask
     }, { status: 201 });

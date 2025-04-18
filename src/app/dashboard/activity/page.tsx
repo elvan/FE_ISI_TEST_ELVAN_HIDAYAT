@@ -11,7 +11,7 @@ interface ActivityLog {
   entityId: number;
   action: LogAction;
   userId: number;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   createdAt: string;
   user: {
     id: number;
@@ -76,8 +76,12 @@ export default function ActivityLogPage() {
         return `Created a new ${entityType.toLowerCase()}`;
       case LogAction.UPDATED:
         return `Updated ${entityType.toLowerCase()} information`;
-      case LogAction.STATUS_CHANGED:
-        return `Changed task status from "${log.details.previousStatus?.replace(/_/g, ' ')}" to "${log.details.newStatus?.replace(/_/g, ' ')}"`;
+      case LogAction.STATUS_CHANGED: {
+        // Add type assertions for the status values
+        const previousStatus = log.details.previousStatus as string | undefined;
+        const newStatus = log.details.newStatus as string | undefined;
+        return `Changed task status from "${previousStatus?.replace(/_/g, ' ') || 'unknown'}" to "${newStatus?.replace(/_/g, ' ') || 'unknown'}"`;  
+      }
       case LogAction.ASSIGNED:
         return log.details.newAssignee 
           ? `Assigned task to a team member` 

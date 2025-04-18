@@ -8,8 +8,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useAuth, useRequireLead } from '@/lib/auth-hooks';
-import { UserRole } from '@/types';
+import { useRequireLead } from '@/lib/auth-hooks';
 
 interface TeamMember {
   id: number;

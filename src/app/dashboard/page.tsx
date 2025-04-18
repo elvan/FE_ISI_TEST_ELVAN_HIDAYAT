@@ -39,7 +39,7 @@ interface ActivityLog {
   entityId: number;
   action: LogAction;
   userId: number;
-  details: any;
+  details: Record<string, unknown>;
   createdAt: string;
   user: User;
 }
@@ -110,7 +110,7 @@ export default function DashboardPage() {
       <header className="bg-card border border-border rounded-lg p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold mb-1">Welcome back, {user?.name}</h1>
-          <p className="text-muted-foreground">Here's an overview of your tasks and recent activity.</p>
+          <p className="text-muted-foreground">Here&apos;s an overview of your tasks and recent activity.</p>
         </div>
         
         {isLead && (

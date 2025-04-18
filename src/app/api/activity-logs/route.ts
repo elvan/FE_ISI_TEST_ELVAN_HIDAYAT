@@ -24,44 +24,45 @@ export async function GET(request: NextRequest) {
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? parseInt(limitParam) : 100; // Default limit of 100 logs
     
-    // Build query
-    let query = db.select({
+    // Prepare filters array
+    const filterConditions = [];
+    
+    // Filter by user role
+    if (!isLead) {
+      // Team members only see logs related to their own actions or tasks assigned to them
+      filterConditions.push(eq(activityLogs.userId, userId));
+    }
+    
+    // Filter by entity type if specified
+    if (entityTypeParam && Object.values(EntityType).includes(entityTypeParam as EntityType)) {
+      filterConditions.push(eq(activityLogs.entityType, entityTypeParam as EntityType));
+    }
+    
+    // Filter by action if specified
+    if (actionParam && Object.values(LogAction).includes(actionParam as LogAction)) {
+      filterConditions.push(eq(activityLogs.action, actionParam as LogAction));
+    }
+    
+    // Build the query with all filters applied at once
+    const whereCondition = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+    
+    const query = db.select({
       log: activityLogs,
       user: {
         id: users.id,
         name: users.name,
         email: users.email,
       }
-    }).from(activityLogs)
-      .leftJoin(users, eq(activityLogs.userId, users.id))
-      .orderBy(desc(activityLogs.createdAt))
-      .limit(limit); // Use the requested limit
-    
-    // Apply filters
-    const filters = [];
-    
-    // Filter by user role
-    if (!isLead) {
-      // Team members only see logs related to their own actions or tasks assigned to them
-      filters.push(eq(activityLogs.userId, userId));
-    }
-    
-    // Filter by entity type if specified
-    if (entityTypeParam && Object.values(EntityType).includes(entityTypeParam as EntityType)) {
-      filters.push(eq(activityLogs.entityType, entityTypeParam as EntityType));
-    }
-    
-    // Filter by action if specified
-    if (actionParam && Object.values(LogAction).includes(actionParam as LogAction)) {
-      filters.push(eq(activityLogs.action, actionParam as LogAction));
-    }
-    
-    // Apply filters if any
-    if (filters.length > 0) {
-      query = query.where(and(...filters));
-    }
-    
-    const result = await query;
+    })
+    .from(activityLogs)
+    .leftJoin(users, eq(activityLogs.userId, users.id))
+    .orderBy(desc(activityLogs.createdAt))
+    .limit(limit);
+
+    // Apply the where condition if we have filters
+    const result = whereCondition 
+      ? await query.where(whereCondition)
+      : await query;
     
     // Format the result
     const formattedLogs = result.map(item => ({
