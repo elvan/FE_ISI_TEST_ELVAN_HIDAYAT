@@ -1,36 +1,160 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# To-Do List Application
+
+A task management web application with role-based permissions (Lead and Team Member) built with Next.js, TypeScript, NextAuth.js, and Drizzle ORM with PostgreSQL.
+
+## Features
+
+- **User Authentication**: Secure login with JWT strategy
+- **Role-Based Access Control**: Two user roles with different permissions:
+  - **Lead**: Can create and modify tasks, assign tasks to team members
+  - **Team Member**: Can update status and details of assigned tasks
+- **Task Management**: Create, view, edit, and track tasks with 4 different statuses:
+  - Not Started
+  - In Progress
+  - Done
+  - Rejected
+- **Activity Logging**: Comprehensive audit trail of all changes made to tasks
+- **Responsive UI**: Fully responsive design built with TailwindCSS
+
+## Tech Stack
+
+- **Frontend**: Next.js, TypeScript, TailwindCSS, React Hook Form, Zod
+- **State Management**: React Hooks, Context API
+- **Backend**: Next.js API Routes
+- **Authentication**: NextAuth.js with JWT
+- **Database**: PostgreSQL with Drizzle ORM
+- **Deployment**: Docker Compose
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js (v18 or newer)
+- npm or yarn
+- Docker and Docker Compose for deployment
+
+### Local Development Setup
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/yourusername/todo-list-app.git
+cd todo-list-app
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Set up environment variables:
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` with your specific configuration.
+
+4. Start the PostgreSQL database using Docker:
+
+```bash
+docker-compose up postgres -d
+```
+
+5. Generate database migrations and apply them:
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+6. Seed the database with initial data:
+
+```bash
+npm run db:seed
+```
+
+7. Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) to use the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Test Accounts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+After running the seed script, you can use these accounts to test the application:
 
-## Learn More
+- **Lead User**: 
+  - Email: lead@example.com
+  - Password: password123
 
-To learn more about Next.js, take a look at the following resources:
+- **Team Member**:
+  - Email: alice@example.com
+  - Password: password123
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Docker Deployment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+To deploy the application with Docker Compose:
 
-## Deploy on Vercel
+```bash
+docker-compose up -d
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This will start both the Next.js application and PostgreSQL database in containers.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Database Schema
+
+### Users Table
+- id (PK)
+- name
+- email
+- password (hashed)
+- role (enum: 'lead', 'team_member')
+- createdAt
+- updatedAt
+
+### Tasks Table
+- id (PK)
+- title
+- description
+- status (enum: 'not_started', 'in_progress', 'done', 'rejected')
+- createdById (FK to Users)
+- assignedToId (FK to Users, nullable)
+- dueDate (nullable)
+- createdAt
+- updatedAt
+
+### ActivityLogs Table
+- id (PK)
+- entityType (e.g., 'task', 'user')
+- entityId (the ID of the affected entity)
+- action (e.g., 'created', 'updated', 'status_changed')
+- userId (FK to Users, who performed the action)
+- details (JSON field with before/after values)
+- createdAt
+
+## Project Structure
+
+```
+├── src/
+│   ├── app/              # Next.js App Router
+│   │   ├── (auth)/       # Authentication pages
+│   │   ├── api/          # API routes
+│   │   ├── dashboard/    # Dashboard pages
+│   │   └── [...]
+│   ├── components/       # Reusable UI components
+│   ├── db/               # Database configuration & schema
+│   ├── lib/              # Utility functions
+│   ├── types/            # TypeScript type definitions
+│   └── auth/             # Authentication utilities
+├── docker-compose.yml    # Docker Compose configuration
+├── Dockerfile            # Docker configuration
+└── [...]
+```
+
+## License
+
+MIT
