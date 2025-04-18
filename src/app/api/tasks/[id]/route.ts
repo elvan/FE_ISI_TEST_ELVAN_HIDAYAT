@@ -1,0 +1,254 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/db';
+import { tasks, users } from '@/db/schema';
+import { activityLogs } from '@/db/schema/activity-logs';
+import { eq, and } from 'drizzle-orm';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-config';
+import { TaskStatus, UserRole, EntityType, LogAction } from '@/types';
+
+// GET a single task by ID
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session || !session.user) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const taskId = parseInt(params.id);
+    if (isNaN(taskId)) {
+      return NextResponse.json({ message: 'Invalid task ID' }, { status: 400 });
+    }
+
+    // Get the task with its relationships
+    const [taskWithRelations] = await db
+      .select({
+        task: tasks,
+        createdBy: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+        },
+        assignedTo: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+        },
+      })
+      .from(tasks)
+      .leftJoin(users, eq(tasks.createdById, users.id))
+      .leftJoin(users, eq(tasks.assignedToId, users.id))
+      .where(eq(tasks.id, taskId));
+
+    if (!taskWithRelations) {
+      return NextResponse.json({ message: 'Task not found' }, { status: 404 });
+    }
+
+    // Check if user has access to this task
+    const userId = session.user.id;
+    const isLead = session.user.role === UserRole.LEAD;
+
+    // Lead can access tasks they created, team members can only access assigned tasks
+    if (
+      !isLead && 
+      taskWithRelations.task.assignedToId !== userId
+    ) {
+      return NextResponse.json(
+        { message: 'You do not have permission to view this task' },
+        { status: 403 }
+      );
+    }
+
+    // Format the response
+    const formattedTask = {
+      ...taskWithRelations.task,
+      createdBy: taskWithRelations.createdBy,
+      assignedTo: taskWithRelations.assignedTo,
+    };
+
+    return NextResponse.json({ task: formattedTask });
+  } catch (error) {
+    console.error('Error fetching task:', error);
+    return NextResponse.json(
+      { message: 'Error fetching task details' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH to update a task
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session || !session.user) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const taskId = parseInt(params.id);
+    if (isNaN(taskId)) {
+      return NextResponse.json({ message: 'Invalid task ID' }, { status: 400 });
+    }
+
+    // Get the existing task
+    const existingTask = await db.query.tasks.findFirst({
+      where: eq(tasks.id, taskId),
+    });
+
+    if (!existingTask) {
+      return NextResponse.json({ message: 'Task not found' }, { status: 404 });
+    }
+
+    // Check permissions based on role
+    const userId = session.user.id;
+    const isLead = session.user.role === UserRole.LEAD;
+
+    if (!isLead && existingTask.assignedToId !== userId) {
+      return NextResponse.json(
+        { message: 'You do not have permission to update this task' },
+        { status: 403 }
+      );
+    }
+
+    // Parse the request body
+    const body = await request.json();
+    const { title, description, status, assignedToId, dueDate } = body;
+
+    // Create an object to hold the updates
+    const updates: any = { updatedAt: new Date() };
+    let logAction = LogAction.UPDATED;
+    const logDetails: Record<string, any> = {};
+
+    // Team members can only update status
+    if (!isLead) {
+      // Team members can only update status
+      if (status && Object.values(TaskStatus).includes(status)) {
+        updates.status = status;
+        logAction = LogAction.STATUS_CHANGED;
+        logDetails.previousStatus = existingTask.status;
+        logDetails.newStatus = status;
+      } else if (status) {
+        return NextResponse.json({ message: 'Invalid status value' }, { status: 400 });
+      }
+    } else {
+      // Lead users can update all fields
+      if (title !== undefined) updates.title = title;
+      if (description !== undefined) updates.description = description;
+      if (status && Object.values(TaskStatus).includes(status)) {
+        updates.status = status;
+        if (status !== existingTask.status) {
+          logAction = LogAction.STATUS_CHANGED;
+          logDetails.previousStatus = existingTask.status;
+          logDetails.newStatus = status;
+        }
+      }
+      if (assignedToId !== undefined) {
+        // Check if assignedToId is a valid user (if provided)
+        if (assignedToId !== null) {
+          const assignedUser = await db.query.users.findFirst({
+            where: eq(users.id, assignedToId),
+          });
+          if (!assignedUser) {
+            return NextResponse.json(
+              { message: 'Assigned user not found' },
+              { status: 404 }
+            );
+          }
+          // Check if user has team_member role
+          if (assignedUser.role !== UserRole.TEAM_MEMBER) {
+            return NextResponse.json(
+              { message: 'Only team members can be assigned to tasks' },
+              { status: 400 }
+            );
+          }
+        }
+        
+        updates.assignedToId = assignedToId;
+        
+        // If assignment changed, log it specifically
+        if (assignedToId !== existingTask.assignedToId) {
+          logAction = LogAction.ASSIGNED;
+          logDetails.previousAssignee = existingTask.assignedToId;
+          logDetails.newAssignee = assignedToId;
+        }
+      }
+      if (dueDate !== undefined) {
+        updates.dueDate = dueDate ? new Date(dueDate) : null;
+      }
+    }
+
+    // If no valid updates were provided
+    if (Object.keys(updates).length <= 1) { // 1 because updatedAt is always included
+      return NextResponse.json(
+        { message: 'No valid updates provided' },
+        { status: 400 }
+      );
+    }
+
+    // Update the task
+    const [updatedTask] = await db
+      .update(tasks)
+      .set(updates)
+      .where(eq(tasks.id, taskId))
+      .returning();
+
+    // Log the update
+    await db.insert(activityLogs).values({
+      entityType: EntityType.TASK,
+      entityId: taskId,
+      action: logAction,
+      userId: session.user.id,
+      details: logDetails,
+      createdAt: new Date(),
+    });
+
+    // Get the updated task with relations for the response
+    const [taskWithRelations] = await db
+      .select({
+        task: tasks,
+        createdBy: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+        },
+        assignedTo: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+        },
+      })
+      .from(tasks)
+      .leftJoin(users, eq(tasks.createdById, users.id))
+      .leftJoin(users, eq(tasks.assignedToId, users.id))
+      .where(eq(tasks.id, taskId));
+
+    // Format the response
+    const formattedTask = {
+      ...taskWithRelations.task,
+      createdBy: taskWithRelations.createdBy,
+      assignedTo: taskWithRelations.assignedTo,
+    };
+
+    return NextResponse.json({ 
+      message: 'Task updated successfully',
+      task: formattedTask 
+    });
+  } catch (error) {
+    console.error('Error updating task:', error);
+    return NextResponse.json(
+      { message: 'Error updating task' },
+      { status: 500 }
+    );
+  }
+}
