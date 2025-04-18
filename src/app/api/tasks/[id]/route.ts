@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { tasks, users } from '@/db/schema';
 import { activityLogs } from '@/db/schema/activity-logs';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
 import { TaskStatus, UserRole, EntityType, LogAction } from '@/types';
@@ -24,31 +24,48 @@ export async function GET(
       return NextResponse.json({ message: 'Invalid task ID' }, { status: 400 });
     }
 
-    // Get the task with its relationships
-    const [taskWithRelations] = await db
+    // Get the task with creator info
+    const task = await db
       .select({
-        task: tasks,
-        createdBy: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-        },
-        assignedTo: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-        },
+        id: tasks.id,
+        title: tasks.title,
+        description: tasks.description,
+        status: tasks.status,
+        createdById: tasks.createdById,
+        assignedToId: tasks.assignedToId,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        dueDate: tasks.dueDate,
+        creatorId: users.id,
+        creatorName: users.name,
+        creatorEmail: users.email,
+        creatorRole: users.role,
       })
       .from(tasks)
       .leftJoin(users, eq(tasks.createdById, users.id))
-      .leftJoin(users, eq(tasks.assignedToId, users.id))
-      .where(eq(tasks.id, taskId));
-
-    if (!taskWithRelations) {
+      .where(eq(tasks.id, taskId))
+      .then(rows => rows[0]);
+    
+    if (!task) {
       return NextResponse.json({ message: 'Task not found' }, { status: 404 });
     }
+    
+    // Get assignee info if task has an assignee
+    let assignee = null;
+    if (task.assignedToId) {
+      assignee = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+        })
+        .from(users)
+        .where(eq(users.id, task.assignedToId))
+        .then(rows => rows[0] || null);
+    }
+
+    // NOTE: We already checked if task exists above
 
     // Check if user has access to this task
     const userId = session.user.id;
@@ -57,7 +74,7 @@ export async function GET(
     // Lead can access tasks they created, team members can only access assigned tasks
     if (
       !isLead && 
-      taskWithRelations.task.assignedToId !== userId
+      task.assignedToId !== userId
     ) {
       return NextResponse.json(
         { message: 'You do not have permission to view this task' },
@@ -67,9 +84,22 @@ export async function GET(
 
     // Format the response
     const formattedTask = {
-      ...taskWithRelations.task,
-      createdBy: taskWithRelations.createdBy,
-      assignedTo: taskWithRelations.assignedTo,
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      createdById: task.createdById,
+      assignedToId: task.assignedToId,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      dueDate: task.dueDate,
+      createdBy: {
+        id: task.creatorId,
+        name: task.creatorName,
+        email: task.creatorEmail,
+        role: task.creatorRole,
+      },
+      assignedTo: assignee,
     };
 
     return NextResponse.json({ task: formattedTask });
@@ -211,33 +241,61 @@ export async function PATCH(
       createdAt: new Date(),
     });
 
-    // Get the updated task with relations for the response
-    const [taskWithRelations] = await db
+    // Get the updated task with creator info
+    const taskWithCreator = await db
       .select({
-        task: tasks,
-        createdBy: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-        },
-        assignedTo: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-        },
+        id: tasks.id,
+        title: tasks.title,
+        description: tasks.description,
+        status: tasks.status,
+        createdById: tasks.createdById,
+        assignedToId: tasks.assignedToId,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+        dueDate: tasks.dueDate,
+        creatorId: users.id,
+        creatorName: users.name,
+        creatorEmail: users.email,
+        creatorRole: users.role,
       })
       .from(tasks)
       .leftJoin(users, eq(tasks.createdById, users.id))
-      .leftJoin(users, eq(tasks.assignedToId, users.id))
-      .where(eq(tasks.id, taskId));
+      .where(eq(tasks.id, taskId))
+      .then(rows => rows[0]);
+    
+    // Get assignee info if task has an assignee
+    let assignee = null;
+    if (taskWithCreator.assignedToId) {
+      assignee = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+        })
+        .from(users)
+        .where(eq(users.id, updatedTask.assignedToId))
+        .then(rows => rows[0] || null);
+    }
 
     // Format the response
     const formattedTask = {
-      ...taskWithRelations.task,
-      createdBy: taskWithRelations.createdBy,
-      assignedTo: taskWithRelations.assignedTo,
+      id: taskWithCreator.id,
+      title: taskWithCreator.title,
+      description: taskWithCreator.description,
+      status: taskWithCreator.status,
+      createdById: taskWithCreator.createdById,
+      assignedToId: taskWithCreator.assignedToId,
+      createdAt: taskWithCreator.createdAt,
+      updatedAt: taskWithCreator.updatedAt,
+      dueDate: taskWithCreator.dueDate,
+      createdBy: {
+        id: taskWithCreator.creatorId,
+        name: taskWithCreator.creatorName,
+        email: taskWithCreator.creatorEmail,
+        role: taskWithCreator.creatorRole,
+      },
+      assignedTo: assignee,
     };
 
     return NextResponse.json({ 

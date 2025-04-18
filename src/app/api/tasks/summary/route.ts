@@ -38,9 +38,13 @@ export async function GET(request: NextRequest) {
       `
     );
 
-    // Process the results
+    // Debug the result structure
+    console.log('Task summary result:', JSON.stringify(result, null, 2));
+
+    // Process the results - Drizzle returns an array directly, not a rows property
     let total = 0;
-    for (const row of result.rows) {
+    // The result is the array directly
+    for (const row of result) {
       const status = row.status as string;
       const count = Number(row.count);
       

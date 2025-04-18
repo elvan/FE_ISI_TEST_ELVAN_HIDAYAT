@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { tasks, users } from '@/db/schema';
 import { activityLogs } from '@/db/schema/activity-logs';
-import { eq, and, desc, isNull, asc, or } from 'drizzle-orm';
+import { eq, and, desc, isNull, asc, or, sql } from 'drizzle-orm';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
 import { TaskStatus, UserRole, EntityType, LogAction } from '@/types';
@@ -19,24 +19,26 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const statusParam = searchParams.get('status');
     
+    // We'll use a different approach with two separate queries
+    // 1. First query to get the tasks with creator info
     let query = db.select({
-      tasks: tasks,
-      createdBy: {
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        role: users.role,
-      },
-      assignedTo: {
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        role: users.role,
-      }
-    }).from(tasks)
-      .leftJoin(users, eq(tasks.createdById, users.id))
-      .leftJoin(users, eq(tasks.assignedToId, users.id))
-      .orderBy(desc(tasks.createdAt));
+      id: tasks.id,
+      title: tasks.title,
+      description: tasks.description,
+      status: tasks.status,
+      createdById: tasks.createdById,
+      assignedToId: tasks.assignedToId,
+      createdAt: tasks.createdAt,
+      updatedAt: tasks.updatedAt,
+      dueDate: tasks.dueDate,
+      creatorId: users.id,
+      creatorName: users.name,
+      creatorEmail: users.email,
+      creatorRole: users.role,
+    })
+    .from(tasks)
+    .leftJoin(users, eq(tasks.createdById, users.id))
+    .orderBy(desc(tasks.createdAt));
 
     // Filter by user role
     if (session.user.role === UserRole.LEAD) {
@@ -54,11 +56,48 @@ export async function GET(request: NextRequest) {
 
     const result = await query;
 
+    // Get all unique assignedToIds to fetch assignee info
+    const assigneeIds = result
+      .filter(task => task.assignedToId !== null)
+      .map(task => task.assignedToId);
+    
+    // Only fetch assignees if there are any tasks with assignees
+    let assignees = [];
+    if (assigneeIds.length > 0) {
+      assignees = await db.select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+      })
+      .from(users)
+      .where(sql`${users.id} IN (${sql.join(assigneeIds, sql`, `)})`);
+    }
+
+    // Create a map of assignee info by id for quick lookup
+    const assigneeMap = {};
+    for (const assignee of assignees) {
+      assigneeMap[assignee.id] = assignee;
+    }
+
     // Format the result
     const formattedTasks = result.map(item => ({
-      ...item.tasks,
-      createdBy: item.createdBy,
-      assignedTo: item.assignedTo,
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      status: item.status,
+      createdById: item.createdById,
+      assignedToId: item.assignedToId,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      dueDate: item.dueDate,
+      createdBy: {
+        id: item.creatorId,
+        name: item.creatorName,
+        email: item.creatorEmail,
+        role: item.creatorRole,
+      },
+      assignedTo: item.assignedToId ? assigneeMap[item.assignedToId] || null : null,
     }));
 
     return NextResponse.json({ tasks: formattedTasks });
