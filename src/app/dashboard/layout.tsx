@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth, useRequireAuth } from '@/lib/auth-hooks';
@@ -10,22 +10,22 @@ interface SidebarLinkProps {
   href: string;
   children: ReactNode;
   icon: ReactNode;
+  exact?: boolean;
 }
 
-function SidebarLink({ href, children, icon }: SidebarLinkProps) {
+function SidebarLink({ href, children, icon, exact = true }: SidebarLinkProps) {
   const pathname = usePathname();
-  const isActive = pathname === href;
+  const isActive = exact ? pathname === href : pathname.startsWith(href);
 
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-        isActive
-          ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+      className={`flex items-center gap-3 px-4 py-2.5 rounded-md transition-all ${isActive 
+        ? 'bg-primary/10 text-primary font-medium dark:bg-primary/20 dark:text-primary-foreground'
+        : 'text-muted-foreground hover:bg-secondary hover:text-foreground dark:hover:bg-secondary dark:hover:text-secondary-foreground'
       }`}
     >
-      <span className="text-gray-500 dark:text-gray-400">{icon}</span>
+      <span className={`${isActive ? 'text-primary' : 'text-muted-foreground'} transition-colors`}>{icon}</span>
       <span>{children}</span>
     </Link>
   );
@@ -35,11 +35,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { isLoading } = useRequireAuth();
   const { user, signOut } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  
+  // Handle hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  if (isLoading) {
+  if (isLoading || !mounted) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-600 rounded-full border-t-transparent"></div>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="animate-spin h-10 w-10 border-4 border-primary rounded-full border-t-transparent"></div>
       </div>
     );
   }
@@ -51,7 +57,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen bg-muted/30 dark:bg-background">
       {/* Mobile sidebar backdrop */}
       {isSidebarOpen && (
         <div
@@ -62,18 +68,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-20 w-64 transform transition-transform duration-200 ease-in-out bg-white dark:bg-gray-800 shadow-lg lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-20 w-72 transform transition-transform duration-200 ease-in-out bg-card dark:bg-card border-r border-border shadow-md lg:static lg:translate-x-0 ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex flex-col h-full">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="text-xl font-bold">Todo List App</div>
+          <div className="p-5 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="bg-primary/20 text-primary p-2 rounded-md">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <div className="text-xl font-bold">Todo List App</div>
+            </div>
           </div>
 
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <div className="mb-2 px-4 text-xs uppercase font-semibold text-muted-foreground">Main</div>
             <SidebarLink
               href="/dashboard"
+              exact={true}
               icon={
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -96,6 +111,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
             <SidebarLink
               href="/dashboard/tasks"
+              exact={false}
               icon={
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -118,8 +134,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
             {isLead && (
               <>
+                <div className="mt-5 mb-2 px-4 text-xs uppercase font-semibold text-muted-foreground">Lead Actions</div>
                 <SidebarLink
                   href="/dashboard/tasks/create"
+                  exact={true}
                   icon={
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -142,6 +160,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
                 <SidebarLink
                   href="/dashboard/team"
+                  exact={true}
                   icon={
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -164,8 +183,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </>
             )}
 
+            <div className="mt-5 mb-2 px-4 text-xs uppercase font-semibold text-muted-foreground">Reports</div>
             <SidebarLink
               href="/dashboard/activity"
+              exact={true}
               icon={
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -187,22 +208,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </SidebarLink>
           </nav>
 
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-5 mt-auto border-t border-border">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">{user?.name}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">
-                  {user?.role.replace('_', ' ')}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="relative w-9 h-9 overflow-hidden bg-primary/10 rounded-full flex items-center justify-center text-primary-foreground font-medium">
+                  {user?.name?.charAt(0).toUpperCase() || "U"}
+                </div>
+                <div>
+                  <p className="font-medium">{user?.name}</p>
+                  <p className="text-sm text-muted-foreground capitalize">
+                    {user?.role.replace('_', ' ')}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => signOut()}
-                className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                 aria-label="Logout"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400"
+                  className="h-5 w-5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -223,11 +249,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top navbar */}
-        <header className="sticky top-0 z-10 bg-white dark:bg-gray-800 shadow-sm">
-          <div className="px-4 py-3 flex items-center justify-between">
+        <header className="sticky top-0 z-10 bg-card border-b border-border">
+          <div className="px-5 py-3 flex items-center justify-between">
             <button
               onClick={toggleSidebar}
-              className="lg:hidden p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="lg:hidden p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
               aria-label="Toggle sidebar"
             >
               <svg
@@ -245,14 +271,25 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 />
               </svg>
             </button>
-            <div className="text-lg font-semibold lg:hidden">Todo List App</div>
-            <div>{/* Placeholder for right side content */}</div>
+            <div className="text-lg font-semibold lg:hidden flex items-center gap-2">
+              <div className="bg-primary/20 text-primary p-1 rounded">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              Todo List
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground hidden sm:inline-block">Welcome, {user?.name}</span>
+            </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900">
-          {children}
+        <main className="flex-1 overflow-y-auto p-6 bg-background">
+          <div className="max-w-7xl mx-auto">
+            {children}
+          </div>
         </main>
       </div>
     </div>

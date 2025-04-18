@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-hooks';
 import { EntityType, LogAction, TaskStatus, UserRole } from '@/types';
 import Link from 'next/link';
+import { TaskSummaryCard } from '@/components/dashboard/TaskSummaryCard';
+import { RecentTasksList } from '@/components/dashboard/RecentTasksList';
+import { RecentActivityList } from '@/components/dashboard/RecentActivityList';
 
 // Types for task summary
 type TaskSummary = {
@@ -94,200 +96,84 @@ export default function DashboardPage() {
     }
   }, [user]);
 
-  const statusColorMap = {
-    [TaskStatus.NOT_STARTED]: 'bg-gray-100 text-gray-800',
-    [TaskStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
-    [TaskStatus.DONE]: 'bg-green-100 text-green-800',
-    [TaskStatus.REJECTED]: 'bg-red-100 text-red-800',
+  // Status labels to display in the dashboard
+  const statusLabels = {
+    [TaskStatus.NOT_STARTED]: 'Not Started',
+    [TaskStatus.IN_PROGRESS]: 'In Progress',
+    [TaskStatus.DONE]: 'Done',
+    [TaskStatus.REJECTED]: 'Rejected',
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+    <div className="space-y-8">
+      {/* Dashboard Header */}
+      <header className="bg-card border border-border rounded-lg p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Welcome back, {user?.name}</h1>
+          <p className="text-muted-foreground">Here's an overview of your tasks and recent activity.</p>
+        </div>
+        
         {isLead && (
           <Link href="/dashboard/tasks/create">
-            <Button>Create New Task</Button>
+            <Button className="btn-primary flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create New Task
+            </Button>
           </Link>
         )}
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
-              Total Tasks
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {isLoading ? (
-                <div className="h-8 w-16 bg-gray-200 animate-pulse rounded"></div>
-              ) : (
-                taskSummary.total
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Task Summary Cards */}
+      <section>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          Task Overview
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <TaskSummaryCard 
+            title="Total Tasks"
+            count={taskSummary.total}
+            isLoading={isLoading}
+          />
+          
+          {Object.entries(statusLabels).map(([status, label]) => (
+            <TaskSummaryCard 
+              key={status}
+              title={label}
+              count={taskSummary[status as TaskStatus]}
+              status={status as TaskStatus}
+              total={taskSummary.total}
+              isLoading={isLoading}
+            />
+          ))}
+        </div>
+      </section>
 
-        {Object.entries(statusColorMap).map(([status, colorClass]) => (
-          <Card key={status}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">
-                {status
-                  .replace(/_/g, ' ')
-                  .split(' ')
-                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                  .join(' ')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center">
-                <span className="text-3xl font-bold mr-2">
-                  {isLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 animate-pulse rounded"></div>
-                  ) : (
-                    taskSummary[status as TaskStatus]
-                  )}
-                </span>
-                <span className={`text-xs px-2 py-1 rounded-full ${colorClass}`}>
-                  {isLoading ? (
-                    <div className="h-4 w-16 bg-gray-200 animate-pulse rounded-full"></div>
-                  ) : (
-                    `${Math.round(
-                      (taskSummary[status as TaskStatus] / Math.max(taskSummary.total, 1)) * 100
-                    )}%`
-                  )}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Tasks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-14 bg-gray-100 rounded-md animate-pulse"></div>
-                ))}
-              </div>
-            ) : recentTasks.length === 0 ? (
-              <div className="text-center py-6 text-gray-500">
-                <p>No tasks found</p>
-                {isLead && (
-                  <Link href="/dashboard/tasks/create">
-                    <Button variant="outline" className="mt-2">
-                      Create your first task
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  {recentTasks.map((task) => (
-                    <Link href={`/dashboard/tasks/${task.id}`} key={task.id}>
-                      <div className="p-3 border rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
-                        <div className="flex justify-between items-start mb-1">
-                          <h4 className="font-medium truncate">{task.title}</h4>
-                          <span className={`text-xs px-2 py-1 rounded-full ${statusColorMap[task.status]}`}>
-                            {task.status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-                          </span>
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {task.assignedTo ? 
-                            `Assigned to: ${task.assignedTo.name}` : 
-                            'Not assigned'}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-                <Link href="/dashboard/tasks" className="block">
-                  <Button variant="outline" fullWidth>
-                    View All Tasks
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-14 bg-gray-100 rounded-md animate-pulse"></div>
-                ))}
-              </div>
-            ) : recentActivity.length === 0 ? (
-              <div className="text-center py-6 text-gray-500">
-                <p>No activity found</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  {recentActivity.map((log) => {
-                    // Format the activity log message
-                    let actionText = '';
-                    switch (log.action) {
-                      case LogAction.CREATED:
-                        actionText = 'created';
-                        break;
-                      case LogAction.UPDATED:
-                        actionText = 'updated';
-                        break;
-                      case LogAction.STATUS_CHANGED:
-                        actionText = 'changed status of';
-                        break;
-                      case LogAction.ASSIGNED:
-                        actionText = 'assigned';
-                        break;
-                      default:
-                        actionText = log.action.toLowerCase();
-                    }
-                    
-                    const entityText = log.entityType === EntityType.TASK ? 'a task' : 'an item';
-                    const formattedDate = new Date(log.createdAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    });
-                    
-                    return (
-                      <div className="p-3 border rounded-md" key={log.id}>
-                        <div className="flex justify-between items-start">
-                          <p className="text-sm">
-                            <span className="font-medium">{log.user.name}</span>
-                            {' '}{actionText}{' '}{entityText}
-                          </p>
-                          <span className="text-xs text-gray-500">{formattedDate}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <Link href="/dashboard/activity" className="block">
-                  <Button variant="outline" fullWidth>
-                    View Activity Logs
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Recent Tasks & Activity */}
+      <section>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Recent Updates
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <RecentTasksList 
+            tasks={recentTasks} 
+            isLoading={isLoading} 
+            isLead={isLead}
+          />
+          
+          <RecentActivityList 
+            activityLogs={recentActivity} 
+            isLoading={isLoading}
+          />
+        </div>
+      </section>
     </div>
   );
 }
