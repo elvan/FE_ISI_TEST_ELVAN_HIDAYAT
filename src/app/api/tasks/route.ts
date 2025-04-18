@@ -18,6 +18,8 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id;
     const { searchParams } = new URL(request.url);
     const statusParam = searchParams.get('status');
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam) : undefined;
     
     // We'll use a different approach with two separate queries
     // 1. First query to get the tasks with creator info
@@ -38,7 +40,8 @@ export async function GET(request: NextRequest) {
     })
     .from(tasks)
     .leftJoin(users, eq(tasks.createdById, users.id))
-    .orderBy(desc(tasks.createdAt));
+    .orderBy(desc(tasks.createdAt))
+    .limit(limit || 100); // Default limit of 100, or use the specified limit
 
     // Filter by user role
     if (session.user.role === UserRole.LEAD) {

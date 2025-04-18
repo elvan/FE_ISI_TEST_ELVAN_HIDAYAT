@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-hooks';
-import { TaskStatus, UserRole } from '@/types';
+import { EntityType, LogAction, TaskStatus, UserRole } from '@/types';
 import Link from 'next/link';
 
 // Types for task summary
@@ -13,6 +13,34 @@ type TaskSummary = {
 } & {
   total: number;
 };
+
+// Types for tasks and activity logs
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role?: UserRole;
+}
+
+interface Task {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  createdAt: string;
+  createdBy: User;
+  assignedTo: User | null;
+}
+
+interface ActivityLog {
+  id: number;
+  entityType: EntityType;
+  entityId: number;
+  action: LogAction;
+  userId: number;
+  details: any;
+  createdAt: string;
+  user: User;
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -23,27 +51,46 @@ export default function DashboardPage() {
     [TaskStatus.REJECTED]: 0,
     total: 0,
   });
+  const [recentTasks, setRecentTasks] = useState<Task[]>([]);
+  const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const isLead = user?.role === UserRole.LEAD;
 
   useEffect(() => {
-    async function fetchTaskSummary() {
+    async function fetchDashboardData() {
       try {
-        const response = await fetch('/api/tasks/summary');
-        if (response.ok) {
-          const data = await response.json();
-          setTaskSummary(data.summary);
+        setIsLoading(true);
+        
+        // Fetch task summary
+        const summaryResponse = await fetch('/api/tasks/summary');
+        if (summaryResponse.ok) {
+          const summaryData = await summaryResponse.json();
+          setTaskSummary(summaryData.summary);
+        }
+        
+        // Fetch recent tasks (limited to 5)
+        const tasksResponse = await fetch('/api/tasks?limit=5');
+        if (tasksResponse.ok) {
+          const tasksData = await tasksResponse.json();
+          setRecentTasks(tasksData.tasks || []);
+        }
+        
+        // Fetch recent activity (limited to 5)
+        const activityResponse = await fetch('/api/activity-logs?limit=5');
+        if (activityResponse.ok) {
+          const activityData = await activityResponse.json();
+          setRecentActivity(activityData.logs || []);
         }
       } catch (error) {
-        console.error('Error fetching task summary:', error);
+        console.error('Error fetching dashboard data:', error);
       } finally {
         setIsLoading(false);
       }
     }
 
     if (user) {
-      fetchTaskSummary();
+      fetchDashboardData();
     }
   }, [user]);
 
@@ -130,7 +177,7 @@ export default function DashboardPage() {
                   <div key={i} className="h-14 bg-gray-100 rounded-md animate-pulse"></div>
                 ))}
               </div>
-            ) : taskSummary.total === 0 ? (
+            ) : recentTasks.length === 0 ? (
               <div className="text-center py-6 text-gray-500">
                 <p>No tasks found</p>
                 {isLead && (
@@ -142,7 +189,26 @@ export default function DashboardPage() {
                 )}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {recentTasks.map((task) => (
+                    <Link href={`/dashboard/tasks/${task.id}`} key={task.id}>
+                      <div className="p-3 border rounded-md hover:bg-gray-50 transition-colors cursor-pointer">
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="font-medium truncate">{task.title}</h4>
+                          <span className={`text-xs px-2 py-1 rounded-full ${statusColorMap[task.status]}`}>
+                            {task.status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {task.assignedTo ? 
+                            `Assigned to: ${task.assignedTo.name}` : 
+                            'Not assigned'}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
                 <Link href="/dashboard/tasks" className="block">
                   <Button variant="outline" fullWidth>
                     View All Tasks
@@ -164,8 +230,54 @@ export default function DashboardPage() {
                   <div key={i} className="h-14 bg-gray-100 rounded-md animate-pulse"></div>
                 ))}
               </div>
+            ) : recentActivity.length === 0 ? (
+              <div className="text-center py-6 text-gray-500">
+                <p>No activity found</p>
+              </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {recentActivity.map((log) => {
+                    // Format the activity log message
+                    let actionText = '';
+                    switch (log.action) {
+                      case LogAction.CREATED:
+                        actionText = 'created';
+                        break;
+                      case LogAction.UPDATED:
+                        actionText = 'updated';
+                        break;
+                      case LogAction.STATUS_CHANGED:
+                        actionText = 'changed status of';
+                        break;
+                      case LogAction.ASSIGNED:
+                        actionText = 'assigned';
+                        break;
+                      default:
+                        actionText = log.action.toLowerCase();
+                    }
+                    
+                    const entityText = log.entityType === EntityType.TASK ? 'a task' : 'an item';
+                    const formattedDate = new Date(log.createdAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
+                    
+                    return (
+                      <div className="p-3 border rounded-md" key={log.id}>
+                        <div className="flex justify-between items-start">
+                          <p className="text-sm">
+                            <span className="font-medium">{log.user.name}</span>
+                            {' '}{actionText}{' '}{entityText}
+                          </p>
+                          <span className="text-xs text-gray-500">{formattedDate}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
                 <Link href="/dashboard/activity" className="block">
                   <Button variant="outline" fullWidth>
                     View Activity Logs

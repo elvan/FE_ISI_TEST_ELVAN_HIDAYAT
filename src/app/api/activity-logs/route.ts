@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const entityTypeParam = searchParams.get('entityType');
     const actionParam = searchParams.get('action');
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam) : 100; // Default limit of 100 logs
     
     // Build query
     let query = db.select({
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
     }).from(activityLogs)
       .leftJoin(users, eq(activityLogs.userId, users.id))
       .orderBy(desc(activityLogs.createdAt))
-      .limit(100); // Limit to most recent 100 logs
+      .limit(limit); // Use the requested limit
     
     // Apply filters
     const filters = [];
