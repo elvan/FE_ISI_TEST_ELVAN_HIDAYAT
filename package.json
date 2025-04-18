@@ -16,6 +16,8 @@
     "@hookform/resolvers": "^5.0.1",
     "@neondatabase/serverless": "^1.0.0",
     "bcryptjs": "^3.0.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "drizzle-kit": "^0.31.0",
     "drizzle-orm": "^0.42.0",
     "drizzle-zod": "^0.7.1",
