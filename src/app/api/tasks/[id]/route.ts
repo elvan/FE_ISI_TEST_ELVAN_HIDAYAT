@@ -158,9 +158,9 @@ export async function PATCH(
     let logAction = LogAction.UPDATED;
     const logDetails: Record<string, unknown> = {};
 
-    // Team members can only update status
+    // Team members can update status and description
     if (!isLead) {
-      // Team members can only update status
+      // Handle status updates
       if (status && Object.values(TaskStatus).includes(status)) {
         updates.status = status;
         logAction = LogAction.STATUS_CHANGED;
@@ -168,6 +168,16 @@ export async function PATCH(
         logDetails.newStatus = status;
       } else if (status) {
         return NextResponse.json({ message: 'Invalid status value' }, { status: 400 });
+      }
+      
+      // Allow team members to update description
+      if (description !== undefined) {
+        updates.description = description;
+        // If no status change, mark as a general update
+        if (!updates.status) {
+          logAction = LogAction.UPDATED;
+          logDetails.field = 'description';
+        }
       }
     } else {
       // Lead users can update all fields

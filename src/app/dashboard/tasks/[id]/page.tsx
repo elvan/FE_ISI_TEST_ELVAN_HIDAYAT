@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-hooks';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,8 +32,7 @@ interface Task {
 
 export default function TaskDetailPage() {
   const params = useParams();
-  const router = useRouter();
-  const { user, isLead } = useAuth();
+  const { isLead } = useAuth();
   const [task, setTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +142,7 @@ export default function TaskDetailPage() {
       setSuccessMessage(null);
       
       // Create update payload based on user role
-      const updateData: Record<string, any> = {};
+      const updateData: Record<string, string | number | boolean | null | undefined> = {};
       
       if (isLead) {
         // Lead can update all fields
